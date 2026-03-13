@@ -56,17 +56,14 @@ async function updateGoldPrice(env: Env) {
 	const data = await res.json();
 	const goldPriceData = ZGoldPriceDataList.parse(data);
 	const goldPriceObjects = goldPriceData.DataList.Data;
+	const ITEM = "NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)";
 	for (const goldPriceObject of goldPriceObjects) {
 		if (!goldPriceObject["@row"]) continue;
 		const row = goldPriceObject["@row"];
 
 		if (!goldPriceObject[`@n_${row}`]) continue;
 		const name = goldPriceObject[`@n_${row}`];
-		if (
-			name.toLowerCase() !==
-			"NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)".toLowerCase()
-		)
-			continue;
+		if (name.toLowerCase() !== ITEM.toLowerCase()) continue;
 
 		if (!goldPriceObject[`@pb_${row}`]) continue;
 		const priceBuy = goldPriceObject[`@pb_${row}`];
