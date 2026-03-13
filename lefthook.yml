@@ -7,7 +7,7 @@ pre-commit:
     check:
       glob: "*.{ts,tsx,js,mjs}"
       run: |
-        bun check {staged_files}
+        bun check --write {staged_files}
         git diff --quiet -- {staged_files} || (
           echo "Commit blocked: biome check changed files."
           exit 1
@@ -18,4 +18,4 @@ pre-push:
     check:
       run: bun check
     typecheck:
-      run: tsc --noEmit
+      run: bun typecheck
