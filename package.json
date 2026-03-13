@@ -6,7 +6,8 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --test-scheduled",
 		"cf-typegen": "wrangler types",
-		"check": "biome check --write"
+		"check": "biome check",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.6",
