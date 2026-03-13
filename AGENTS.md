@@ -32,3 +32,9 @@ https://developers.cloudflare.com/workers/runtime-apis/nodejs/
 
 Retrieve API references and limits from:
 `/kv/` · `/r2/` · `/d1/` · `/durable-objects/` · `/queues/` · `/vectorize/` · `/workers-ai/` · `/agents/`
+
+## Project Description
+
+A simple Cloudflare Workers project that run scheduled task periodically to fetch and store the latest gold price.
+
+If the 2 most recent prices indicate a more than 10% reduction in the price, the Workers will send an alert email.

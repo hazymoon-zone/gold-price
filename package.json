@@ -5,12 +5,20 @@
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --test-scheduled",
-		"start": "wrangler dev --test-scheduled",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"check": "biome check --write"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.4.6",
 		"@types/node": "^25.4.0",
 		"typescript": "^5.5.2",
 		"wrangler": "^4.72.0"
+	},
+	"dependencies": {
+		"@types/luxon": "^3.7.1",
+		"form-data": "^4.0.5",
+		"luxon": "^3.7.2",
+		"mailgun.js": "^12.7.1",
+		"zod": "^4.3.6"
 	}
 }
