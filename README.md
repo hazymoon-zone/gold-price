@@ -27,7 +27,7 @@ bun install
 Generate Worker types (after changing bindings in `wrangler.jsonc`):
 
 ```bash
-npx wrangler types
+bunx wrangler types
 ```
 
 ## Configuration
@@ -48,8 +48,8 @@ Set these as Worker secrets:
 Add secrets:
 
 ```bash
-npx wrangler secret put MAILGUN_API_KEY
-npx wrangler secret put MAILGUN_SANDBOX
+bunx wrangler secret put MAILGUN_API_KEY
+bunx wrangler secret put MAILGUN_SANDBOX
 ```
 
 ## Development
@@ -57,7 +57,7 @@ npx wrangler secret put MAILGUN_SANDBOX
 Run locally with the scheduled handler enabled:
 
 ```bash
-npx wrangler dev --test-scheduled
+bunx wrangler dev --test-scheduled
 ```
 
 Trigger the scheduled handler manually:
@@ -69,7 +69,7 @@ curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 ## Deploy
 
 ```bash
-npx wrangler deploy
+bunx wrangler deploy
 ```
 
 ## How It Works
