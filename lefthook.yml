@@ -1,0 +1,21 @@
+output:
+  - failure
+
+pre-commit:
+  parallel: true
+  commands:
+    check:
+      glob: "*.{ts,tsx,js,mjs}"
+      run: |
+        bun check {staged_files}
+        git diff --quiet -- {staged_files} || (
+          echo "Commit blocked: biome check changed files."
+          exit 1
+        )
+
+pre-push:
+  commands:
+    check:
+      run: bun check
+    typecheck:
+      run: tsc --noEmit
