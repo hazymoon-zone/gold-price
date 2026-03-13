@@ -12,11 +12,15 @@
 	},
 	"triggers": {
 		"crons": [
-			"* * * * *"
+			"0 1-23/2 * * *" // every even hour in UTC+7
 		]
 	},
-	"compatibility_flags": [
-		"nodejs_compat"
+	"compatibility_flags": ["nodejs_compat"],
+	"kv_namespaces": [
+		{
+			"binding": "GOLD_PRICE",
+			"id": "7c7cfd89697746dca325ca89e35ffb87"
+		}
 	]
 	/**
 	 * Smart Placement

@@ -1,40 +1,149 @@
-/**
- * Welcome to Cloudflare Workers!
- *
- * This is a template for a Scheduled Worker: a Worker that can run on a
- * configurable interval:
- * https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Run `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"` to see your Worker in action
- * - Run `npm run deploy` to publish your Worker
- *
- * Bind resources to your Worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { DateTime } from "luxon";
+import { z } from "zod";
+
+const ZGoldPriceObject = z.record(z.string(), z.string());
+const ZGoldPriceData = z.object({
+	Data: z.array(ZGoldPriceObject),
+});
+const ZGoldPriceDataList = z.object({
+	DataList: ZGoldPriceData,
+});
+
+interface Env {
+	GOLD_PRICE: KVNamespace;
+	MAILGUN_API_KEY: string;
+	MAILGUN_SANDBOX: string;
+}
+
+type RecentGoldPrices = {
+	secondRecentPrice: number;
+	mostRecentPrice: number;
+};
 
 export default {
 	async fetch(req) {
 		const url = new URL(req.url);
-		url.pathname = '/__scheduled';
-		url.searchParams.append('cron', '* * * * *');
-		return new Response(`To test the scheduled handler, ensure you have used the "--test-scheduled" then try running "curl ${url.href}".`);
+		url.pathname = "/__scheduled";
+		url.searchParams.append("cron", "* * * * *");
+		return new Response(
+			`To test the scheduled handler, ensure you have used the "--test-scheduled" then try running "curl ${url.href}".`,
+		);
 	},
 
 	// The scheduled handler is invoked at the interval set in our wrangler.jsonc's
 	// [[triggers]] configuration.
-	async scheduled(event, env, ctx): Promise<void> {
-		// A Cron Trigger can make requests to other endpoints on the Internet,
-		// publish to a Queue, query a D1 Database, and much more.
-		//
-		// We'll keep it simple and make an API call to a Cloudflare API:
-		let resp = await fetch('https://api.cloudflare.com/client/v4/ips');
-		let wasSuccessful = resp.ok ? 'success' : 'fail';
+	async scheduled(_event, env, _ctx): Promise<void> {
+		await updateGoldPrice(env);
+		const recentGoldPrices = await getRecentGoldPrices(env);
+		if (!recentGoldPrices) return;
 
-		// You could store this result in KV, write to a D1 Database, or publish to a Queue.
-		// In this template, we'll just log the result:
-		console.log(`trigger fired at ${event.cron}: ${wasSuccessful}`);
+		const hitLimit = checkHitLimitReduction(recentGoldPrices);
+		if (!hitLimit) return;
+
+		await sendAlertEmail(env, recentGoldPrices);
 	},
 } satisfies ExportedHandler<Env>;
+
+async function updateGoldPrice(env: Env) {
+	const url = new URL(
+		"http://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v",
+	);
+	const res = await fetch(url);
+	if (!res.ok) {
+		console.error(`failed to fetch ${url}: ${res.status} ${res.statusText}`);
+		return;
+	}
+	const data = await res.json();
+	const goldPriceData = ZGoldPriceDataList.parse(data);
+	const goldPriceObjects = goldPriceData.DataList.Data;
+	for (const goldPriceObject of goldPriceObjects) {
+		if (!goldPriceObject["@row"]) continue;
+		const row = goldPriceObject["@row"];
+
+		if (!goldPriceObject[`@n_${row}`]) continue;
+		const name = goldPriceObject[`@n_${row}`];
+		if (
+			name.toLowerCase() !==
+			"NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)".toLowerCase()
+		)
+			continue;
+
+		if (!goldPriceObject[`@pb_${row}`]) continue;
+		const priceBuy = goldPriceObject[`@pb_${row}`];
+
+		if (!goldPriceObject[`@d_${row}`]) continue;
+		const dateString = goldPriceObject[`@d_${row}`];
+		const date = DateTime.fromFormat(dateString, "dd/MM/yyyy HH:mm");
+		const dateISO = date.toISO();
+		if (!dateISO) continue;
+
+		env.GOLD_PRICE.put(dateISO, priceBuy);
+	}
+}
+
+async function getRecentGoldPrices(env: Env): Promise<RecentGoldPrices | null> {
+	const result = await env.GOLD_PRICE.list();
+	const keys = result.keys;
+	if (keys.length < 2) return null;
+
+	const sortedKeys = keys.sort(
+		(prev, next) =>
+			DateTime.fromISO(prev.name).toMillis() -
+			DateTime.fromISO(next.name).toMillis(),
+	);
+
+	const lastTwoKeys = sortedKeys.slice(sortedKeys.length - 2);
+	const secondRecentKey = lastTwoKeys[0];
+	const mostRecentKey = lastTwoKeys[1];
+
+	const secondRecentPriceStr = await env.GOLD_PRICE.get(secondRecentKey.name);
+	const mostRecentPriceStr = await env.GOLD_PRICE.get(mostRecentKey.name);
+
+	if (!mostRecentPriceStr || !secondRecentPriceStr) return null;
+
+	const secondRecentPrice = Number(secondRecentPriceStr);
+	const mostRecentPrice = Number(mostRecentPriceStr);
+
+	return { secondRecentPrice, mostRecentPrice };
+}
+
+function checkHitLimitReduction(recentGoldPrices: RecentGoldPrices): boolean {
+	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
+	if (mostRecentPrice >= secondRecentPrice) return false;
+
+	const reduction =
+		((secondRecentPrice - mostRecentPrice) / secondRecentPrice) * 100;
+	if (reduction < 10) return false;
+
+	return true;
+}
+
+async function sendAlertEmail(env: Env, recentGoldPrices: RecentGoldPrices) {
+	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
+	const form = new FormData();
+	form.append("from", `Mailgun Sandbox <postmaster@${env.MAILGUN_SANDBOX}>`);
+	form.append("to", "Huy Bui <huybui150396@gmail.com>");
+	form.append("subject", "Gold price dips 10%");
+	form.append(
+		"text",
+		`Attention! Gold price dips 10% since last check. Previous: ${secondRecentPrice}. Current: ${mostRecentPrice}`,
+	);
+	const auth = btoa(`api:${env.MAILGUN_API_KEY}`);
+	try {
+		const response = await fetch(
+			`https://api.mailgun.net/v3/${env.MAILGUN_SANDBOX}/messages`,
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Basic ${auth}`,
+				},
+				body: form,
+			},
+		);
+		if (!response.ok) {
+			console.error("Mailgun error", await response.text());
+		}
+	} catch (error) {
+		console.error(error); //logs any error
+	}
+}
