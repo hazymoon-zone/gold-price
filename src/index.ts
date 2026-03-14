@@ -65,8 +65,8 @@ async function updateGoldPrice(env: Env) {
 		const name = goldPriceObject[`@n_${row}`];
 		if (name.toLowerCase() !== ITEM.toLowerCase()) continue;
 
-		if (!goldPriceObject[`@pb_${row}`]) continue;
-		const priceBuy = goldPriceObject[`@pb_${row}`];
+		if (!goldPriceObject[`@ps_${row}`]) continue;
+		const priceSell = goldPriceObject[`@ps_${row}`];
 
 		if (!goldPriceObject[`@d_${row}`]) continue;
 		const dateString = goldPriceObject[`@d_${row}`];
@@ -74,7 +74,7 @@ async function updateGoldPrice(env: Env) {
 		const dateISO = date.toISO();
 		if (!dateISO) continue;
 
-		env.GOLD_PRICE.put(dateISO, priceBuy);
+		env.GOLD_PRICE.put(dateISO, priceSell);
 	}
 }
 
@@ -104,26 +104,33 @@ async function getRecentGoldPrices(env: Env): Promise<RecentGoldPrices | null> {
 	return { secondRecentPrice, mostRecentPrice };
 }
 
+function calcReduction(recentGoldPrices: RecentGoldPrices): number {
+	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
+	const reduction =
+		((secondRecentPrice - mostRecentPrice) / secondRecentPrice) * 100;
+	return Number(reduction.toFixed(2));
+}
+
 function checkHitLimitReduction(recentGoldPrices: RecentGoldPrices): boolean {
 	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
 	if (mostRecentPrice >= secondRecentPrice) return false;
 
-	const reduction =
-		((secondRecentPrice - mostRecentPrice) / secondRecentPrice) * 100;
-	if (reduction < 10) return false;
+	const reduction = calcReduction(recentGoldPrices);
+	if (reduction < 1) return false;
 
 	return true;
 }
 
 async function sendAlertEmail(env: Env, recentGoldPrices: RecentGoldPrices) {
 	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
+	const reduction = calcReduction(recentGoldPrices);
 	const form = new FormData();
 	form.append("from", `Mailgun Sandbox <postmaster@${env.MAILGUN_SANDBOX}>`);
 	form.append("to", "Huy Bui <huybui150396@gmail.com>");
-	form.append("subject", "Gold price dips 10%");
+	form.append("subject", `Gold price dips ${reduction}%`);
 	form.append(
 		"text",
-		`Attention! Gold price dips 10% since last check. Previous: ${secondRecentPrice}. Current: ${mostRecentPrice}`,
+		`Attention! Gold price dips ${reduction}% since last check. Previous: ${secondRecentPrice}. Current: ${mostRecentPrice}`,
 	);
 	const auth = btoa(`api:${env.MAILGUN_API_KEY}`);
 	try {

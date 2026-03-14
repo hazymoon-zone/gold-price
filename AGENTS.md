@@ -37,4 +37,4 @@ Retrieve API references and limits from:
 
 A simple Cloudflare Workers project that run scheduled task periodically to fetch and store the latest gold price.
 
-If the 2 most recent prices indicate a more than 10% reduction in the price, the Workers will send an alert email.
+If the 2 most recent prices indicate a more than 1% reduction in the price, the Workers will send an alert email.
