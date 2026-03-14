@@ -1,6 +1,6 @@
 # Gold Price Worker
 
-A Cloudflare Worker that fetches gold prices on a schedule, stores the latest values in KV, and sends an email alert if the most recent price drops more than 10% compared to the previous value.
+A Cloudflare Worker that fetches gold prices on a schedule, stores the latest values in KV, and sends an email alert if the most recent price drops more than 1% compared to the previous value.
 
 ## Features
 
