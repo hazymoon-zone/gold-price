@@ -74,7 +74,9 @@ async function updateGoldPrice(env: Env) {
 		const dateISO = date.toISO();
 		if (!dateISO) continue;
 
-		env.GOLD_PRICE.put(dateISO, priceSell);
+		env.GOLD_PRICE.put(dateISO, priceSell, {
+			expirationTtl: 604800, // 7 days
+		});
 	}
 }
 
