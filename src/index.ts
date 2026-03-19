@@ -159,9 +159,11 @@ async function sendAlertEmail(env: Env, recentGoldPrices: RecentGoldPrices) {
 			},
 		);
 		if (!response.ok) {
-			console.error("Mailgun error", await response.text());
+			const error = await response.text();
+			throw new Error(`Mailgun error: ${error}`);
 		}
 	} catch (error) {
 		console.error(error); //logs any error
+		throw error;
 	}
 }

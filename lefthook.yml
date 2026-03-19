@@ -5,7 +5,7 @@ pre-commit:
   parallel: true
   commands:
     check:
-      glob: "*.{ts,tsx,js,mjs}"
+      glob: "*.{ts,tsx,js,mjs,jsonc}"
       run: |
         bun check --write {staged_files}
         git diff --quiet -- {staged_files} || (
