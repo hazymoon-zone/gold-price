@@ -21,10 +21,13 @@ type RecentGoldPrices = {
 };
 
 export default {
-	async fetch(req) {
+	async fetch(req, env) {
 		const url = new URL(req.url);
 		url.pathname = "/__scheduled";
 		url.searchParams.append("cron", "* * * * *");
+
+		await process(env);
+
 		return new Response(
 			`To test the scheduled handler, ensure you have used the "--test-scheduled" then try running "curl ${url.href}".`,
 		);
@@ -33,16 +36,20 @@ export default {
 	// The scheduled handler is invoked at the interval set in our wrangler.jsonc's
 	// [[triggers]] configuration.
 	async scheduled(_event, env, _ctx): Promise<void> {
-		await updateGoldPrice(env);
-		const recentGoldPrices = await getRecentGoldPrices(env);
-		if (!recentGoldPrices) return;
-
-		const hitLimit = checkHitLimitReduction(recentGoldPrices);
-		if (!hitLimit) return;
-
-		await sendAlertEmail(env, recentGoldPrices);
+		await process(env);
 	},
 } satisfies ExportedHandler<Env>;
+
+async function process(env: Env) {
+	await updateGoldPrice(env);
+	const recentGoldPrices = await getRecentGoldPrices(env);
+	if (!recentGoldPrices) return;
+
+	const hitLimit = checkHitLimitReduction(recentGoldPrices);
+	if (!hitLimit) return;
+
+	await sendAlertEmail(env, recentGoldPrices);
+}
 
 async function updateGoldPrice(env: Env) {
 	const url = new URL(
