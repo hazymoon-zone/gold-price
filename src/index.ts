@@ -64,6 +64,7 @@ async function updateGoldPrice(env: Env) {
 	const goldPriceData = ZGoldPriceDataList.parse(data);
 	const goldPriceObjects = goldPriceData.DataList.Data;
 	const ITEM = "NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)";
+	const uniquePrices: string[] = [];
 	for (const goldPriceObject of goldPriceObjects) {
 		if (!goldPriceObject["@row"]) continue;
 		const row = goldPriceObject["@row"];
@@ -74,6 +75,10 @@ async function updateGoldPrice(env: Env) {
 
 		if (!goldPriceObject[`@ps_${row}`]) continue;
 		const priceSell = goldPriceObject[`@ps_${row}`];
+
+		// If there are multiple instances of the same price point, only store one of them
+		if (uniquePrices.includes(priceSell)) continue;
+		uniquePrices.push(priceSell);
 
 		if (!goldPriceObject[`@d_${row}`]) continue;
 		const dateString = goldPriceObject[`@d_${row}`];
