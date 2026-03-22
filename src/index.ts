@@ -42,13 +42,27 @@ export default {
 
 async function process(env: Env) {
 	await updateGoldPrice(env);
-	const recentGoldPrices = await getRecentGoldPrices(env);
-	if (!recentGoldPrices) return;
 
-	const hitLimit = checkHitLimitReduction(recentGoldPrices);
+	const keyResult = await env.GOLD_PRICE.list();
+	const keys = keyResult.keys.map((key) => key.name);
+	keys.sort().reverse();
+	if (keys.length < 2) return;
+
+	const currentMostRecentKey = keys[0];
+	const previousMostRecentKey = await env.GOLD_PRICE.get("most-recent-key");
+
+	// No new gold price data since last check
+	if (currentMostRecentKey === previousMostRecentKey) return;
+
+	const goldPriceDownTrend = await getGoldPriceDownTrend(env, keys);
+	if (goldPriceDownTrend?.length < 2) return;
+
+	const hitLimit = checkHitLimitReduction(goldPriceDownTrend);
 	if (!hitLimit) return;
 
-	await sendAlertEmail(env, recentGoldPrices);
+	await sendAlertEmail(env, goldPriceDownTrend);
+
+	await env.GOLD_PRICE.put("most-recent-key", currentMostRecentKey);
 }
 
 async function updateGoldPrice(env: Env) {
@@ -92,59 +106,62 @@ async function updateGoldPrice(env: Env) {
 	}
 }
 
-async function getRecentGoldPrices(env: Env): Promise<RecentGoldPrices | null> {
-	const result = await env.GOLD_PRICE.list();
-	const keys = result.keys;
-	if (keys.length < 2) return null;
+async function getGoldPriceDownTrend(
+	env: Env,
+	keys: string[],
+): Promise<number[]> {
+	const goldPrices = [];
+	for (const key of keys) {
+		const priceStr = await env.GOLD_PRICE.get(key);
+		if (!priceStr) continue;
 
-	const sortedKeys = keys.sort(
-		(prev, next) =>
-			DateTime.fromISO(prev.name).toMillis() -
-			DateTime.fromISO(next.name).toMillis(),
-	);
+		const price = Number(priceStr);
+		if (goldPrices.length === 0) {
+			goldPrices.push(price);
+			continue;
+		}
 
-	const lastTwoKeys = sortedKeys.slice(sortedKeys.length - 2);
-	const secondRecentKey = lastTwoKeys[0];
-	const mostRecentKey = lastTwoKeys[1];
+		if (goldPrices.includes(price)) continue;
 
-	const secondRecentPriceStr = await env.GOLD_PRICE.get(secondRecentKey.name);
-	const mostRecentPriceStr = await env.GOLD_PRICE.get(mostRecentKey.name);
+		const lastPrice = goldPrices[goldPrices.length - 1];
+		if (price <= lastPrice) {
+			break;
+		}
 
-	if (!mostRecentPriceStr || !secondRecentPriceStr) return null;
+		goldPrices.push(price);
+	}
 
-	const secondRecentPrice = Number(secondRecentPriceStr);
-	const mostRecentPrice = Number(mostRecentPriceStr);
-
-	return { secondRecentPrice, mostRecentPrice };
+	return goldPrices;
 }
 
-function calcReduction(recentGoldPrices: RecentGoldPrices): number {
-	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
+function calcReduction(goldPriceDownTrend: number[]): number {
+	const mostRecentGoldPrice = goldPriceDownTrend[0];
+	const leastRecentGoldPrice = goldPriceDownTrend.slice(-1)[0];
 	const reduction =
-		((secondRecentPrice - mostRecentPrice) / secondRecentPrice) * 100;
-	return Number(reduction.toFixed(2));
+		((leastRecentGoldPrice - mostRecentGoldPrice) / leastRecentGoldPrice) * 100;
+
+	return reduction;
 }
 
-function checkHitLimitReduction(recentGoldPrices: RecentGoldPrices): boolean {
-	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
-	if (mostRecentPrice >= secondRecentPrice) return false;
+function checkHitLimitReduction(goldPriceDownTrend: number[]): boolean {
+	const reduction = calcReduction(goldPriceDownTrend);
 
-	const reduction = calcReduction(recentGoldPrices);
-	if (reduction < 1) return false;
-
-	return true;
+	return reduction >= 1;
 }
 
-async function sendAlertEmail(env: Env, recentGoldPrices: RecentGoldPrices) {
-	const { secondRecentPrice, mostRecentPrice } = recentGoldPrices;
-	const reduction = calcReduction(recentGoldPrices);
+async function sendAlertEmail(env: Env, goldPriceDownTrend: number[]) {
+	const mostRecentGoldPrice = goldPriceDownTrend[0];
+	const leastRecentGoldPrice = goldPriceDownTrend.slice(-1)[0];
+	const reduction = calcReduction(goldPriceDownTrend);
+	const reductionStr = reduction.toFixed(2);
+
 	const form = new FormData();
 	form.append("from", `Mailgun Sandbox <postmaster@${env.MAILGUN_SANDBOX}>`);
 	form.append("to", "Huy Bui <huybui150396@gmail.com>");
-	form.append("subject", `Gold price dips ${reduction}%`);
+	form.append("subject", `Gold price dips ${reductionStr}%`);
 	form.append(
 		"text",
-		`Attention! Gold price dips ${reduction}% since last check. Previous: ${secondRecentPrice}. Current: ${mostRecentPrice}`,
+		`Attention! Gold price dips ${reductionStr}% since last check. Previous: ${leastRecentGoldPrice}. Current: ${mostRecentGoldPrice}`,
 	);
 	const auth = btoa(`api:${env.MAILGUN_API_KEY}`);
 	try {
