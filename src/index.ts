@@ -44,7 +44,9 @@ async function process(env: Env) {
 	await updateGoldPrice(env);
 
 	const keyResult = await env.GOLD_PRICE.list();
-	const keys = keyResult.keys.map((key) => key.name);
+	const keys = keyResult.keys
+		.map((key) => key.name)
+		.filter((key) => key !== "most-recent-key");
 	keys.sort().reverse();
 	if (keys.length < 2) return;
 
@@ -54,15 +56,17 @@ async function process(env: Env) {
 	// No new gold price data since last check
 	if (currentMostRecentKey === previousMostRecentKey) return;
 
-	const goldPriceDownTrend = await getGoldPriceDownTrend(env, keys);
-	if (goldPriceDownTrend?.length < 2) return;
+	try {
+		const goldPriceDownTrend = await getGoldPriceDownTrend(env, keys);
+		if (goldPriceDownTrend?.length < 2) return;
 
-	const hitLimit = checkHitLimitReduction(goldPriceDownTrend);
-	if (!hitLimit) return;
+		const hitLimit = checkHitLimitReduction(goldPriceDownTrend);
+		if (!hitLimit) return;
 
-	await sendAlertEmail(env, goldPriceDownTrend);
-
-	await env.GOLD_PRICE.put("most-recent-key", currentMostRecentKey);
+		await sendAlertEmail(env, goldPriceDownTrend);
+	} finally {
+		await env.GOLD_PRICE.put("most-recent-key", currentMostRecentKey);
+	}
 }
 
 async function updateGoldPrice(env: Env) {
