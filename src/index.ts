@@ -15,11 +15,6 @@ interface Env {
 	MAILGUN_SANDBOX: string;
 }
 
-type RecentGoldPrices = {
-	secondRecentPrice: number;
-	mostRecentPrice: number;
-};
-
 export default {
 	async fetch(req, env) {
 		const url = new URL(req.url);
@@ -54,14 +49,27 @@ async function process(env: Env) {
 	const previousMostRecentKey = await env.GOLD_PRICE.get("most-recent-key");
 
 	// No new gold price data since last check
-	if (currentMostRecentKey === previousMostRecentKey) return;
+	if (currentMostRecentKey === previousMostRecentKey) {
+		console.log("No new gold price data since last check");
+		return;
+	}
 
 	try {
 		const goldPriceDownTrend = await getGoldPriceDownTrend(env, keys);
-		if (goldPriceDownTrend?.length < 2) return;
+		if (goldPriceDownTrend?.length < 2) {
+			console.log("No gold price downtrend detected");
+			return;
+		}
+
+		console.log(`Gold price down trend: ${goldPriceDownTrend}`);
 
 		const hitLimit = checkHitLimitReduction(goldPriceDownTrend);
-		if (!hitLimit) return;
+		if (!hitLimit) {
+			console.log("Hit limit not reached");
+			return;
+		}
+
+		console.log(`Hit limit reached: ${hitLimit}`);
 
 		await sendAlertEmail(env, goldPriceDownTrend);
 	} finally {
