@@ -12,7 +12,7 @@
 	},
 	"triggers": {
 		"crons": [
-			"0 1-23/2 * * *" // every even hour in UTC+7
+			"0 * * * *" // every hour
 		]
 	},
 	"compatibility_flags": ["nodejs_compat"],
