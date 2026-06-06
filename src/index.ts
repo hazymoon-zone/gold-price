@@ -1,12 +1,13 @@
-import { DateTime } from "luxon";
 import { z } from "zod";
 
-const ZGoldPriceObject = z.record(z.string(), z.string());
-const ZGoldPriceData = z.object({
-	Data: z.array(ZGoldPriceObject),
-});
-const ZGoldPriceDataList = z.object({
-	DataList: ZGoldPriceData,
+const ZGoldPrice = z.object({
+	success: z.boolean(),
+	timestamp: z.number(),
+	date: z.string(),
+	time: z.string(),
+	type: z.string(),
+	buy: z.number(),
+	sell: z.number(),
 });
 
 interface Env {
@@ -78,44 +79,18 @@ async function process(env: Env) {
 }
 
 async function updateGoldPrice(env: Env) {
-	const url = new URL(
-		"http://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v",
-	);
+	const url = new URL("https://www.vang.today/api/prices?type=VNGSJC");
 	const res = await fetch(url);
 	if (!res.ok) {
 		console.error(`failed to fetch ${url}: ${res.status} ${res.statusText}`);
 		return;
 	}
 	const data = await res.json();
-	const goldPriceData = ZGoldPriceDataList.parse(data);
-	const goldPriceObjects = goldPriceData.DataList.Data;
-	const ITEM = "NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)";
-	const uniquePrices: string[] = [];
-	for (const goldPriceObject of goldPriceObjects) {
-		if (!goldPriceObject["@row"]) continue;
-		const row = goldPriceObject["@row"];
-
-		if (!goldPriceObject[`@n_${row}`]) continue;
-		const name = goldPriceObject[`@n_${row}`];
-		if (name.toLowerCase() !== ITEM.toLowerCase()) continue;
-
-		if (!goldPriceObject[`@ps_${row}`]) continue;
-		const priceSell = goldPriceObject[`@ps_${row}`];
-
-		// If there are multiple instances of the same price point, only store one of them
-		if (uniquePrices.includes(priceSell)) continue;
-		uniquePrices.push(priceSell);
-
-		if (!goldPriceObject[`@d_${row}`]) continue;
-		const dateString = goldPriceObject[`@d_${row}`];
-		const date = DateTime.fromFormat(dateString, "dd/MM/yyyy HH:mm");
-		const dateISO = date.toISO();
-		if (!dateISO) continue;
-
-		env.GOLD_PRICE.put(dateISO, priceSell, {
-			expirationTtl: 604800, // 7 days
-		});
-	}
+	const goldPriceData = ZGoldPrice.parse(data);
+	const key = `${goldPriceData.date} ${goldPriceData.time}`;
+	env.GOLD_PRICE.put(key, `${goldPriceData.sell}`, {
+		expirationTtl: 604800, // 7 days
+	});
 }
 
 async function getGoldPriceDownTrend(
