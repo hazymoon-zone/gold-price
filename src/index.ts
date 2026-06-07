@@ -133,7 +133,7 @@ function calcReduction(goldPriceDownTrend: number[]): number {
 function checkHitLimitReduction(goldPriceDownTrend: number[]): boolean {
 	const reduction = calcReduction(goldPriceDownTrend);
 
-	return reduction >= 1;
+	return reduction >= 0.1;
 }
 
 async function sendAlertEmail(env: Env, goldPriceDownTrend: number[]) {
